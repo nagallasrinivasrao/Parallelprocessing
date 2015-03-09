@@ -3,28 +3,34 @@
 All parallel stream executions use the same (singleton) thread pool: ForkJoinPool.commonPool().
 That's why it's very bad to do IO (more generally blocking calls) in a parallel stream:
 the blocked thread is unusable by ALL parallel streams in the JVM.
-For that, you must use CompletableFuture instead (or ManagedBlocker in some cases) .
+For that, you must use CompletableFuture instead (or ManagedBlocker in some cases). 
+That's for another article though.
 
-There is a (unspecified as far as i know unfortunately) trick to use different ForkJoinPool:
+The goal is to show a few concurrent testing techniques (including running LOTS of them, we'll see it's not so easy)
+, to show a few concurrency tricks.
+
+
+There is a trick to use different ForkJoinPool:
 execute the parallel stream while already within that FJP
 (this doesn't solve all performance issues with parallel streams, just the one mentioned).
+This works because of this:
+http://docs.oracle.com/javase/8/docs/api/java/util/concurrent/ForkJoinTask.html#fork--    
+"Arranges to asynchronously execute this task in the pool the current task is running in, if applicable, or using the ForkJoinPool.commonPool() if not "
 
 This test class tests this trick:
    * executesInCommonPool illustrates the default common pool execution;
     it is the experiment's "control sample"
+    We will see that it is NOT guaranteed.
    * executesInAnotherPool asserts that the trick works
    * tests ending with _sanityCheck test the internal consistency of test results:
     they're not what we really want to test, but if they fail it means the "real tests" contain a bug.
 
-If the testng report is very big, use a command instead of opening it in the browser.
-cat "G:\projets\blog\parallel-stream\parallel-stream\target\surefire-reports\index.html" | grep '60000 methods,'
-
 The results are as follow:
    * Tests that assert that work is done in the default common pool are NOT reproducible.
-    This illustrates that no guarantee is given by the API that a parallel stream will really execute in parallel.
+    This illustrates that no guarantee is given by the API that a parallel stream will even execute in parallel.
     This is the case of executesInCommonPool() and executesInAnotherPool_sanityCheck3()
     For some reason including println in the work seem to increase the probability that the common FJP will be used.
-    The implementation code is hard, i wasn't able to find out why.
+    The implementation code is hard to read, i wasn't able to find out where the decision is made.
     Increasing desired parallelism by using -Djava.util.concurrent.ForkJoinPool.common.parallelism=N
      does not make those tests reproducible
    * Tests that assert that work is done in another pool ARE reproducible.
@@ -34,10 +40,17 @@ A concurrency trick is used to make the tests faster when TEST_TIMES is big:
 using AtomicBoolean.lazySet() instead of set or a volatile field.
 lazySet has weaker visibility semantincs, an explanation by Doug Lea is linked to in the comments.
 
+(Another unrelated minor trick shown is how to make the build fail on warnings with maven)
 
 ******************************************************************
 **********************OOME ISSUES**********************
 ******************************************************************
+This became more time-consuming than the test itself..
+I created 2 Issues at surefire and testng:
+    https://github.com/cbeust/testng/issues/614
+    http://jira.codehaus.org/browse/SUREFIRE-1147             
+
+
 -->huge surefire leak prevents running a lot of repetitions
        (when setting TEST_TIMES = 100_000)
        (failed tests don't matter, 2 of them are SUPPOSED to be non-reproducible)
@@ -150,10 +163,7 @@ va:305)
 
 
 
--->
-Now it's no longer a surefire leak but a TestNG leak.
-This one too was supposed to have been fixed years ago:
-https://github.com/cbeust/testng/issues/291
+-->Now it's no longer a surefire leak but a TestNG leak
 
 
 -->
@@ -182,6 +192,5 @@ My adventures:
              VVM-->memory profiler snapshot crash with allocation stacks enabled
              JMC-->flight recorder: after one OOME becomes unresponsive and recording is lost
 
-The 2 Issues created:
-    https://github.com/cbeust/testng/issues/614
-    http://jira.codehaus.org/browse/SUREFIRE-1147             
+
+
