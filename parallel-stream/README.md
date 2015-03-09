@@ -181,3 +181,7 @@ My adventures:
         -tool issues:
              VVM-->memory profiler snapshot crash with allocation stacks enabled
              JMC-->flight recorder: after one OOME becomes unresponsive and recording is lost
+
+The 2 Issues created:
+    https://github.com/cbeust/testng/issues/614
+    http://jira.codehaus.org/browse/SUREFIRE-1147             
